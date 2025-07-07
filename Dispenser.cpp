@@ -33,10 +33,77 @@
 /* *******************************************         Struct/Typedef section        *******************************************/
 
 //log-in section for MQTT / WIFI
-const char* ssid = "NOME_WIFI";
-const char* password = "SENHA_WIFI";
-const char* mqtt_server = "mosquitto.test.com";
-WiFiClient espClient;
+const char* ssid = "Kodvik wifi hotspot";
+const char* password = "abcd1234";
+
+const char* mqtt_server = "test.mosquitto.org"; // Corrigido o endereço do broker MQTT
+const int mqtt_port = 1883; // Porta do broker MQTT
+
+/* Definicao dos topicos */
+/* Alarmes */
+const char* topico_slot1 = "dispenser/slot1";
+const char* topico_slot2 = "dispenser/slot2";
+const char* topico_slot3 = "dispenser/slot3";
+const char* topico_slot4 = "dispenser/slot4";
+
+const char* topico_slot1_pesoAtual = "dispenser/slot1/peso";
+const char* topico_slot2_pesoAtual = "dispenser/slot2/peso";
+const char* topico_slot3_pesoAtual = "dispenser/slot3/peso";
+const char* topico_slot4_pesoAtual = "dispenser/slot4/peso";
+
+const char* topico_slot1_pesoUnitario = "dispenser/slot1/pesoUnitario";
+const char* topico_slot2_pesoUnitario = "dispenser/slot2/pesoUnitario";
+const char* topico_slot3_pesoUnitario = "dispenser/slot3/pesoUnitario";
+const char* topico_slot4_pesoUnitario = "dispenser/slot4/pesoUnitario";
+
+const char* topico_slot1_horario = "dispenser/slot1/horario";
+const char* topico_slot2_horario = "dispenser/slot2/horario";
+const char* topico_slot3_horario = "dispenser/slot3/horario";
+const char* topico_slot4_horario = "dispenser/slot4/horario";
+
+const char* topico_slot1_dosesRestantes = "dispenser/slot1/dosesRestantes";
+const char* topico_slot2_dosesRestantes = "dispenser/slot2/dosesRestantes";
+const char* topico_slot3_dosesRestantes = "dispenser/slot3/dosesRestantes";
+const char* topico_slot4_dosesRestantes = "dispenser/slot4/dosesRestantes";
+
+
+
+/* Inicialização do WiFi */
+void setup_wifi(){
+  delay(100); // Atraso para estabilizar a conexão, sugerido pelo guia que segui
+  Serial.println(); // Limpa o buffer serial
+  Serial.print("Conectando-se ao WiFi "); // Mensagem de conexão
+  Serial.print(ssid); // Nome da rede Wi-Fi
+  WiFi.begin(ssid, password); // Inicia a conexão Wi-Fi
+
+  while (WiFi.status() != WL_CONNECTED) { // Enquanto não estiver conectado
+    delay(500); // Atraso de 500ms
+    Serial.print("."); // Imprime ponto no console
+  }
+  Serial.println(); // Limpa o buffer serial
+  Serial.println("WiFi conectado"); // Mensagem de conexão bem-sucedida
+  Serial.print("Endereço IP: "); // Mensagem de endereço IP
+  Serial.println(WiFi.localIP()); // Imprime o endereço IP local
+}
+
+/* caso perca a conexão de WiFi tenta reconectar */
+void reconnect() {
+  while (!client.connected()) { // Enquanto não estiver conectado
+    Serial.print("Tentando conexão MQTT..."); // Mensagem de tentativa de conexão
+    if (client.connect("TP2_e_TP3_IOT")) { // Nome do cliente MQTT atualizado
+      Serial.println("conectado"); // Mensagem de conexão bem-sucedida
+      client.subscribe(topic_rele_area1); // Inscreve-se no tópico do relé da área 1
+      client.subscribe(topic_rele_area2); // Inscreve-se no tópico do relé da área 2
+      client.subscribe(topic_rele_area3); // Inscreve-se no tópico do relé da área 3
+    } else {
+      Serial.print("Falha na conexão, rc="); // Mensagem de falha na conexão
+      Serial.print(client.state()); // Imprime o estado da conexão
+      Serial.println(" tentado novamente em 10 segundos"); // Mensagem de tentativa novamente
+      delay(10000); // Atraso de 10 segundos antes de tentar novamente
+    }
+  }
+}
+
 PubSubClient client(espClient);
 
 /*Hardware Definitions*/
