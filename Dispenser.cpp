@@ -22,10 +22,11 @@
 
 /* region Include Section */
 /* *******************************************         Include section        *******************************************/
-#include <WiFi.H>
-#include <PubSebClient.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
 #include <HX711.h>
 #include <Servo.h>
+#include <ArduinoJson.h>
 /* **********************************************************************************************************************
  * endregion */
 
@@ -66,8 +67,6 @@ const char* topico_slot2_dosesRestantes = "dispenser/slot2/dosesRestantes";
 const char* topico_slot3_dosesRestantes = "dispenser/slot3/dosesRestantes";
 const char* topico_slot4_dosesRestantes = "dispenser/slot4/dosesRestantes";
 
-
-
 /* Inicialização do WiFi */
 void setup_wifi(){
   delay(100); // Atraso para estabilizar a conexão, sugerido pelo guia que segui
@@ -92,9 +91,7 @@ void reconnect() {
     Serial.print("Tentando conexão MQTT..."); // Mensagem de tentativa de conexão
     if (client.connect("TP2_e_TP3_IOT")) { // Nome do cliente MQTT atualizado
       Serial.println("conectado"); // Mensagem de conexão bem-sucedida
-      client.subscribe(topic_rele_area1); // Inscreve-se no tópico do relé da área 1
-      client.subscribe(topic_rele_area2); // Inscreve-se no tópico do relé da área 2
-      client.subscribe(topic_rele_area3); // Inscreve-se no tópico do relé da área 3
+      client.subscribe("dispenser/config"); // Inscreve-se no tópico de configuração
     } else {
       Serial.print("Falha na conexão, rc="); // Mensagem de falha na conexão
       Serial.print(client.state()); // Imprime o estado da conexão
@@ -104,6 +101,7 @@ void reconnect() {
   }
 }
 
+WiFiClient espClient;
 PubSubClient client(espClient);
 
 /*Hardware Definitions*/
@@ -111,6 +109,7 @@ PubSubClient client(espClient);
 HX711 balancas[4];
 const int DT_PINS[4] = {4,12,14,26};
 const int SCK_PINS[4] = {5,13,27,25};
+const float CALIBRATION_FACTOR[4] = {-7050.0, -7050.0, -7050.0, -7050.0}; // Ajustar conforme necessário
 
 //Servos
 Servo servos[4];
@@ -134,27 +133,27 @@ float lerPeso(int slot){
     return balancas[slot].get_units(5);
 }
 
-void callback(char* topic, byte* message, unisigned int length){
+void callback(char* topic, byte* message, unsigned int length){
     String msg;
-    for(int i=0; i< length, i++){
-        msg += (char)message[i]
+    for(int i=0; i< length; i++){
+        msg += (char)message[i];
     }
 
     if(String(topic) == "dispenser/config"){
-        //Exemplo de JSON: {"slot0, "dose":2, "horarios":["08:00","20:00"]}
+        //Exemplo de JSON: {"slot":0, "dose":2, "horarios":["08:00","20:00"]}
         DynamicJsonDocument doc(256);
         deserializeJson(doc,msg);
         int slot = doc["slot"];
-        remedios[slot].qtd_por_dose = doc["dose"]
+        remedios[slot].qtd_por_dose = doc["dose"];
         for(int i=0; i<doc["horarios"].size();i++){
-            remedios[slot].horario[i]
+            remedios[slot].horario[i] = doc["horarios"][i];
         }
     }
 }
 
 bool deveLiberarDose(int slot){
     String agora = getHoraAtual(); //usando um RTC ou NTP
-    for(int = 0; i<4; i++){
+    for(int i = 0; i<4; i++){
         if(remedios[slot].horario[i] == agora){
             return true;
         }
@@ -164,8 +163,44 @@ bool deveLiberarDose(int slot){
 
 void liberarDose(int slot){
     servos[slot].write(90);
-    millis(10000); // 10 segundos para retirada do medicamento
+    delay(10000); // 10 segundos para retirada do medicamento
     servos[slot].write(0);
+}
+
+// Function to get current time (placeholder - implement with RTC or NTP)
+String getHoraAtual() {
+    // TODO: Implement with RTC DS3231 or NTP client
+    // For now, return a test time
+    return "08:00";
+}
+/* **********************************************************************************************************************
+ * endregion */
+
+/* region Setup Function */
+/* *******************************************         Setup Function        *******************************************/
+void setup() {
+  Serial.begin(115200);
+  
+  // Initialize HX711 scales
+  for(int i = 0; i < 4; i++) {
+    balancas[i].begin(DT_PINS[i], SCK_PINS[i]);
+    balancas[i].set_scale(CALIBRATION_FACTOR[i]);
+    balancas[i].tare(); // Reset scale to 0
+  }
+  
+  // Initialize servos
+  for(int i = 0; i < 4; i++) {
+    servos[i].attach(SERVO_PINS[i]);
+    servos[i].write(0); // Initial position
+  }
+  
+  // Initialize presence sensor
+  pinMode(SENSOR_PRESENCA, INPUT);
+  
+  // Initialize WiFi and MQTT
+  setup_wifi();
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback);
 }
 /* **********************************************************************************************************************
  * endregion */
@@ -173,7 +208,7 @@ void liberarDose(int slot){
 /* region Main Code */
 /* ********************************************         Main Loop          ********************************************/
 void loop(){
-    if(!client.connect()) reconnect();
+    if(!client.connected()) reconnect();
     client.loop();
 
     //Exemplo: se hora == "08:00" e presença detectada, libera dose
@@ -188,7 +223,7 @@ void loop(){
             }
         }
     }
-    mililis(1000) // checagem a cada segundo
+    delay(1000); // checagem a cada segundo
 }
 /* **********************************************************************************************************************
  * endregion */
